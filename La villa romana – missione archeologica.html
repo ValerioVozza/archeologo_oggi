@@ -1,0 +1,851 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>La villa romana – una missione archeologica</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+:root{
+  --page:#6C5EB5;
+  --screen:#352879;
+  --panel:#271d63;
+  --ink:#FFFFFF;
+  --cyan:#70A4B2;
+  --yellow:#B8C76F;
+  --lightgreen:#9AD284;
+  --lightred:#C98579;
+  --muted:#A9A1E0;
+  --line:#6C5EB5;
+  color-scheme: light;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --page:#1b1442; color-scheme: dark; }
+}
+:root[data-theme="dark"]{ --page:#1b1442; color-scheme: dark; }
+html{ scroll-padding-top: env(safe-area-inset-top, 0px); height:100%; }
+*,*::before,*::after{ box-sizing:border-box; }
+[hidden]{ display:none !important; }
+body{
+  margin:0; min-height:100%;
+  background:var(--page); color:var(--ink);
+  font-family:'VT323', 'Courier New', monospace;
+  font-size:22px; line-height:1.15;
+}
+.wrap{ max-width:860px; margin:0 auto; padding:18px 14px 28px; }
+.screen{ background:var(--screen); padding:14px; min-height:560px; position:relative; overflow:hidden; }
+.px{ font-family:'Press Start 2P', 'Courier New', monospace; line-height:1.5; }
+canvas, img.sp{ image-rendering:pixelated; image-rendering:crisp-edges; }
+
+button{
+  font-family:'Press Start 2P', 'Courier New', monospace; font-size:11px; line-height:1.4;
+  background:var(--ink); color:var(--screen); border:0; padding:10px 12px; cursor:pointer;
+  box-shadow:4px 4px 0 #000;
+}
+button:hover{ background:var(--yellow); }
+button:active{ transform:translate(2px,2px); box-shadow:2px 2px 0 #000; }
+button:disabled{ background:#6C6C6C; color:#959595; cursor:not-allowed; }
+button:focus-visible, input:focus-visible{ outline:3px solid var(--yellow); outline-offset:3px; }
+button.ghost{ background:transparent; color:var(--ink); box-shadow:none; border:2px solid var(--line); }
+button.ghost:hover{ background:var(--panel); }
+
+/* HUD */
+.hud{ display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
+.hud .day{ font-size:11px; color:var(--yellow); }
+.slots{ display:flex; gap:4px; align-items:center; }
+.slots img{ width:28px; height:28px; opacity:.22; }
+.slots img.got{ opacity:1; }
+.hud .sound{ padding:6px 8px; font-size:9px; }
+
+/* dialog */
+.dialog{
+  margin-top:14px; border:3px solid var(--ink); background:#000;
+  display:grid; grid-template-columns:64px 1fr; gap:12px; padding:10px; min-height:110px; align-items:start;
+}
+.dialog .face{ width:64px; height:84px; background:var(--screen); display:flex; align-items:center; justify-content:center; }
+.dialog .face canvas{ width:48px; height:64px; }
+.dialog .who{ font-size:10px; color:var(--yellow); margin-bottom:6px; }
+.dialog .txt{ font-size:24px; min-height:56px; }
+.dialog .row{ display:flex; justify-content:flex-end; margin-top:6px; }
+.dialog .row button[hidden]{ display:none; }
+
+/* title */
+.boot{ font-size:24px; color:var(--muted); white-space:pre-wrap; min-height:260px; }
+.cursor{ display:inline-block; width:12px; height:20px; background:var(--muted); vertical-align:-3px; animation:blink 1s steps(1) infinite; }
+@keyframes blink{ 50%{ opacity:0; } }
+.title{ text-align:center; }
+.title h1{ font-size:clamp(20px, 5vw, 34px); color:var(--yellow); margin:18px 0 6px; text-shadow:4px 4px 0 #000; }
+.title .sub{ font-size:24px; color:var(--cyan); margin-bottom:18px; }
+.team-row{ display:flex; justify-content:center; gap:22px; margin:18px 0; flex-wrap:wrap; }
+.team-row figure{ margin:0; text-align:center; }
+.team-row canvas{ width:72px; height:96px; display:block; margin:0 auto 6px; }
+.team-row figcaption{ font-size:20px; }
+.team-row figcaption b{ display:block; font-family:'Press Start 2P','Courier New',monospace; font-size:10px; color:var(--yellow); font-weight:normal; margin-bottom:2px; }
+.namebox{ display:flex; flex-wrap:wrap; gap:10px; justify-content:center; align-items:center; margin:14px 0 4px; }
+.namebox label{ font-size:22px; width:100%; }
+.namebox input{
+  font-family:'VT323','Courier New',monospace; font-size:26px; background:#000; color:var(--ink);
+  border:3px solid var(--ink); padding:4px 10px; width:min(260px, 100%);
+}
+
+/* site map */
+.map-wrap{ display:grid; grid-template-columns:minmax(0,1fr) 230px; gap:14px; }
+.map-wrap canvas{ width:100%; height:auto; aspect-ratio:320/200; display:block; border:3px solid #000; }
+.side h2{ font-size:11px; color:var(--yellow); margin:0 0 10px; font-weight:normal; }
+.side .stack{ display:flex; flex-direction:column; gap:10px; }
+.side button{ text-align:left; }
+.side button.done{ background:var(--lightgreen); }
+.zones{ display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
+.zones button{ flex:1 1 150px; }
+.hint{ font-size:20px; color:var(--cyan); margin:10px 0 0; }
+
+/* grid */
+.dig{ display:grid; grid-template-columns:minmax(0,1fr) 250px; gap:14px; align-items:start; }
+.frame{ display:grid; grid-template-columns:22px minmax(0,1fr); grid-template-rows:22px auto; gap:4px; }
+.frame .cols{ grid-column:2; display:grid; grid-template-columns:repeat(8, 1fr); text-align:center; font-family:'Press Start 2P','Courier New',monospace; font-size:10px; color:var(--yellow); align-items:end; }
+.frame .rows{ grid-row:2; display:grid; grid-template-rows:repeat(6, 1fr); font-family:'Press Start 2P','Courier New',monospace; font-size:10px; color:var(--yellow); align-items:center; text-align:center; }
+.frame .lbl-hidden{ visibility:hidden; }
+.area{ grid-column:2; grid-row:2; position:relative; display:grid; grid-template-columns:repeat(8, 1fr); background:#588D43; }
+.cell{
+  aspect-ratio:1; border:0; padding:0; box-shadow:none; margin:0; position:relative;
+  background:var(--c, #588D43); outline:1px solid transparent; outline-offset:-1px;
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+  transition:outline-color .6s;
+}
+.cell:hover{ background:var(--c); filter:brightness(1.25); }
+.cell:active{ transform:none; box-shadow:none; }
+.strung .cell{ outline:1px dashed #E8E8E8; }
+.cell img{ width:72%; height:72%; }
+.cell img.pending{ animation:blink .6s steps(1) infinite; }
+.cell .flag{ position:absolute; right:2px; top:2px; width:8px; height:8px; background:var(--yellow); }
+.cell.hint-on::after{
+  content:""; position:absolute; inset:2px; border:3px solid var(--cyan); pointer-events:none;
+  animation:blink 1.2s steps(1) infinite;
+}
+.cell.target{ outline:3px solid var(--yellow) !important; }
+.peg{
+  position:absolute; width:22px; height:22px; padding:0; background:#433900; border:3px solid var(--yellow);
+  box-shadow:none; z-index:3; animation:blink .9s steps(1) infinite;
+}
+.peg.set{ background:var(--ink); border-color:var(--ink); animation:none; cursor:default; }
+.peg.tl{ left:-11px; top:-11px; } .peg.tr{ right:-11px; top:-11px; }
+.peg.bl{ left:-11px; bottom:-11px; } .peg.br{ right:-11px; bottom:-11px; }
+
+.legend{ margin-top:12px; display:grid; gap:4px; }
+.legend div{ display:grid; grid-template-columns:26px 1fr; gap:8px; align-items:center; font-size:20px; }
+.legend i{ display:block; width:26px; height:18px; }
+.legend .top{ font-size:10px; color:var(--yellow); font-family:'Press Start 2P','Courier New',monospace; display:block; margin-bottom:4px; }
+
+.cards{ display:flex; flex-direction:column; gap:10px; }
+.card{ background:var(--panel); border:3px solid transparent; padding:8px; display:grid; grid-template-columns:42px 1fr; gap:8px; cursor:pointer; }
+.card.sel{ border-color:var(--yellow); }
+.card canvas{ width:36px; height:48px; }
+.card .nm{ font-family:'Press Start 2P','Courier New',monospace; font-size:10px; color:var(--yellow); }
+.card .fr{ font-size:18px; color:var(--muted); }
+.pips{ display:flex; gap:3px; margin:4px 0 6px; }
+.pips span{ width:12px; height:10px; background:var(--lightgreen); }
+.pips span.off{ background:#444444; }
+.card button{ font-size:8px; padding:6px 7px; box-shadow:2px 2px 0 #000; width:100%; }
+.howto{ font-size:19px; color:var(--muted); margin-top:10px; }
+
+/* modal */
+.modal{ position:absolute; inset:0; background:rgba(0,0,0,.72); display:flex; align-items:center; justify-content:center; padding:14px; z-index:10; }
+.sheet{ background:#E8E2C8; color:#2a1f10; width:min(560px, 100%); max-height:100%; overflow:auto; padding:16px 18px; border:4px solid #000; box-shadow:8px 8px 0 #000; }
+.sheet h2{ font-size:12px; margin:0 0 10px; font-weight:normal; color:#68372B; }
+.sheet p{ margin:6px 0; font-size:22px; }
+.sheet .q{ margin:12px 0 4px; font-size:22px; }
+.opts{ display:flex; flex-wrap:wrap; gap:8px; }
+.opts button{ background:#2a1f10; color:#E8E2C8; }
+.opts button:hover{ background:#68372B; }
+.opts button.ok{ background:#588D43; color:#fff; }
+.opts button.no{ background:#9A6759; color:#fff; }
+.fb{ min-height:26px; font-size:20px; color:#68372B; }
+.photo{ display:flex; gap:14px; align-items:center; margin:8px 0; }
+.photo .frame-img{ background:#fff; padding:8px 8px 20px; border:2px solid #000; position:relative; }
+.photo .frame-img canvas{ width:80px; height:80px; display:block; background:var(--bg,#6F4F25); }
+.photo .frame-img.blank canvas{ filter:brightness(0); }
+.flash{ position:absolute; inset:0; background:#fff; animation:flash .5s forwards; pointer-events:none; }
+@keyframes flash{ to{ opacity:0; } }
+.sheet .act{ display:flex; justify-content:flex-end; gap:10px; margin-top:12px; }
+.sheet .act button{ background:#2a1f10; color:#E8E2C8; }
+.sheet .act button:hover{ background:#68372B; }
+.diary li{ font-size:21px; margin:4px 0; }
+.diary ul{ padding-left:22px; margin:6px 0; }
+.sketches{ display:flex; gap:6px; flex-wrap:wrap; margin:6px 0; }
+.sketches img{ width:34px; height:34px; background:#d4ccaa; padding:3px; }
+.stars{ font-family:'Press Start 2P','Courier New',monospace; font-size:24px; color:#68372B; letter-spacing:6px; margin:6px 0; }
+.shake{ animation:shake .3s; }
+@keyframes shake{ 25%{ transform:translateX(-5px);} 75%{ transform:translateX(5px);} }
+
+@media (max-width:680px){
+  .map-wrap, .dig{ grid-template-columns:1fr; }
+  .cards{ display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:6px; }
+  .card{ grid-template-columns:1fr; text-align:center; padding:6px; }
+  .card canvas{ margin:0 auto; }
+  .card .fr{ display:none; }
+  .pips{ justify-content:center; }
+  .screen{ padding:10px; }
+  body{ font-size:20px; }
+  .dialog{ grid-template-columns:48px 1fr; }
+  .dialog .face{ width:48px; height:64px; }
+  .dialog .face canvas{ width:36px; height:48px; }
+  .dialog .txt{ font-size:21px; }
+}
+@media (prefers-reduced-motion: reduce){
+  *{ animation:none !important; transition:none !important; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <main class="screen" id="screen">
+    <div class="hud px" id="hud" hidden>
+      <span class="day" id="day">Giorno 1</span>
+      <span class="slots" id="slots" aria-label="Reperti romani trovati"></span>
+      <button class="ghost sound" id="soundBtn" type="button">Suono: sì</button>
+    </div>
+    <div id="view"></div>
+    <section class="dialog" id="dialog" hidden aria-live="polite">
+      <div class="face" id="face"></div>
+      <div>
+        <div class="who px" id="who"></div>
+        <div class="txt" id="txt"></div>
+        <div class="row"><button id="nextBtn" type="button" hidden>Avanti</button></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+(() => {
+'use strict';
+const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- PIXEL SPRITES ---------- */
+const BODY = [
+  "..SSSSSSSS..",
+  ".SSSSSSSSSS.",
+  ".sSSSSSSSSs.",
+  ".sSSSSSSSSs.",
+  "...PPPPPP...",
+  "...PPPPPP...",
+  "...PP..PP...",
+  "...PP..PP...",
+  "..BBB..BBB.."
+];
+const HEADS = {
+  paul: ["....HHHH....","...HHHHHH...",".HHHHHHHHHH.","...hssssh...","...sesses...","...ssssss...","....smms...."],
+  laura:["....hhhh....","...hhhhhh...","..hhhhhhhh..","..hsessesh..","..hssssssh..","..hhsmmshh..","..hh.ss.hh.."],
+  muhammad:["............","...hhhhhh...","...hhhhhh...","...hssssh...","...sesses...","...bssssb...","....bmmb...."]
+};
+const TEAM = [
+  { id:'paul', name:'Paul', from:'archeologo inglese',
+    colors:{H:'#6F4F25',h:'#C27A3A',s:'#F0C4A0',e:'#000000',m:'#9A4A3A',S:'#B8C76F',P:'#6F4F25',B:'#444444',b:'#000000'},
+    ability:'Leggi le fonti', abilityTip:'Mostra una zona dove c’è un reperto romano' },
+  { id:'laura', name:'Laura', from:'archeologa italiana',
+    colors:{h:'#3B2412',s:'#D9A67A',e:'#000000',m:'#9A3A3A',S:'#C0503E',P:'#352879',B:'#433900',H:'#000000',b:'#000000'},
+    ability:'Fiuto per i vasi', abilityTip:'Mostra la colonna di un vaso' },
+  { id:'muhammad', name:'Muhammad', from:'archeologo egiziano',
+    colors:{h:'#111111',s:'#6B4226',e:'#000000',m:'#3A1E10',b:'#111111',S:'#FFFFFF',P:'#6C6C6C',B:'#433900',H:'#000000'},
+    ability:'Fiuto per le monete', abilityTip:'Mostra la riga di una moneta' }
+];
+TEAM.forEach(t => { t.rows = HEADS[t.id].concat(BODY); });
+
+const ITEMS = {
+  vaso:{ name:'Vaso romano', roman:true, layer:3,
+    rows:["...oooo...","....oo....","..o.oo.o..","..oooooo..",".oooooooo.",".oOOOOOOo.",".oooooooo.","..oooooo..","...oooo...","....oo...."],
+    colors:{o:'#D08A48',O:'#68372B'} },
+  moneta:{ name:'Moneta romana', roman:true, layer:3,
+    rows:["...yyyy...",".yyyyyyyy.",".yyYYYYyy.","yyYyyyyYyy","yyYyYYyYyy","yyYyYYyYyy","yyYyyyyYyy",".yyYYYYyy.",".yyyyyyyy.","...yyyy..."],
+    colors:{y:'#E3D36A',Y:'#8C7A2A'} },
+  lattina:{ name:'Lattina di oggi', roman:false, layer:1,
+    rows:["..........","...rrrr...","..wwwwww..","..rrrrrr..","..rwwwwr..","..rrrrrr..","..rwwwwr..","..rrrrrr..","..wwwwww..",".........."],
+    colors:{r:'#C0503E',w:'#CFCFCF'} },
+  chiave:{ name:'Chiave moderna', roman:false, layer:1,
+    rows:["..........","..........",".ggg......","g...g.....","g...gggggg","g...g..g.g",".ggg...g.g","..........","..........",".........."],
+    colors:{g:'#CFCFCF'} },
+  tappo:{ name:'Tappo di bottiglia', roman:false, layer:1,
+    rows:["..........","..........","..rrrrrr..",".rrwwwwrr.",".rwwrrwwr.",".rwwrrwwr.",".rrwwwwrr.","..rrrrrr..","..........",".........."],
+    colors:{r:'#4A8FD8',w:'#FFFFFF'} },
+  coccio:{ name:'Coccio medievale', roman:false, layer:2,
+    rows:["..........","...gg.....","..gGGg....","..gGGGgg..",".gGGGGGGg.",".gGGGGGg..","..ggGGg...","....gg....","..........",".........."],
+    colors:{g:'#3E6B2E',G:'#9AD284'} },
+  fibbia:{ name:'Fibbia medievale', roman:false, layer:2,
+    rows:["..........","..ssssss..",".s......s.",".s..ss..s.",".s..ss..s.",".s......s.","..ssssss..","..........","..........",".........."],
+    colors:{s:'#959595'} }
+};
+
+function spriteCanvas(rows, colors, scale){
+  const w = rows[0].length, h = rows.length;
+  const c = document.createElement('canvas');
+  c.width = w*scale; c.height = h*scale;
+  const x = c.getContext('2d');
+  rows.forEach((r, j) => { [...r].forEach((ch, i) => {
+    if (ch === '.' || !colors[ch]) return;
+    x.fillStyle = colors[ch]; x.fillRect(i*scale, j*scale, scale, scale);
+  }); });
+  return c;
+}
+const IMG = {};
+Object.keys(ITEMS).forEach(k => { IMG[k] = spriteCanvas(ITEMS[k].rows, ITEMS[k].colors, 4).toDataURL(); });
+function charCanvas(id, scale){ const t = TEAM.find(x => x.id === id); return spriteCanvas(t.rows, t.colors, scale || 4); }
+function itemImg(type, cls){ const i = document.createElement('img'); i.src = IMG[type]; i.className = 'sp' + (cls ? ' ' + cls : ''); i.alt = ITEMS[type].name; return i; }
+
+/* ---------- SOUND ---------- */
+let ac = null, soundOn = true;
+function tone(f, d, delay, type){
+  if (!soundOn) return;
+  try{
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = ac.currentTime + (delay || 0);
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type || 'square'; o.frequency.setValueAtTime(f, t0);
+    g.gain.setValueAtTime(0.06, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+    o.connect(g); g.connect(ac.destination); o.start(t0); o.stop(t0 + d + 0.02);
+  }catch(e){}
+}
+const sfx = {
+  blip(){ tone(880, .05); },
+  dig(){ tone(220, .06); tone(160, .08, .06); tone(110, .1, .13); },
+  find(){ [523,659,784,1047].forEach((f,i) => tone(f, .12, i*.09)); },
+  bad(){ tone(140, .25, 0, 'sawtooth'); },
+  ok(){ tone(660, .08); tone(990, .12, .08); },
+  photo(){ tone(1800, .03); tone(1200, .05, .04); },
+  win(){ [392,523,659,784,659,784,1047].forEach((f,i) => tone(f, .16, i*.14)); }
+};
+document.getElementById('soundBtn').addEventListener('click', e => {
+  soundOn = !soundOn; e.currentTarget.textContent = 'Suono: ' + (soundOn ? 'sì' : 'no');
+});
+
+/* ---------- DIALOG ---------- */
+const $ = id => document.getElementById(id);
+const dlg = $('dialog'), txtEl = $('txt'), whoEl = $('who'), faceEl = $('face'), nextBtn = $('nextBtn');
+let queue = [], onDone = null, typing = null, fullText = '';
+function setSpeaker(who){
+  faceEl.innerHTML = '';
+  if (who && who !== 'radio'){ faceEl.appendChild(charCanvas(who, 4)); whoEl.textContent = TEAM.find(t => t.id === who).name; }
+  else { whoEl.textContent = 'Diario di bordo'; }
+}
+function typeText(text){
+  clearInterval(typing); fullText = text;
+  if (reduce){ txtEl.textContent = text; return; }
+  let i = 0; txtEl.textContent = '';
+  typing = setInterval(() => { i += 2; txtEl.textContent = text.slice(0, i); if (i >= text.length){ clearInterval(typing); typing = null; } }, 22);
+}
+function say(who, text){ dlg.hidden = false; queue = []; onDone = null; nextBtn.hidden = true; setSpeaker(who); typeText(text); }
+function talk(lines, done){ dlg.hidden = false; queue = lines.slice(); onDone = done || null; nextLine(); }
+function nextLine(){
+  if (!queue.length){ nextBtn.hidden = true; const d = onDone; onDone = null; if (d) d(); return; }
+  const [who, text] = queue.shift();
+  setSpeaker(who); typeText(text); nextBtn.hidden = false;
+  nextBtn.textContent = queue.length || onDone ? 'Avanti' : 'Ok';
+}
+nextBtn.addEventListener('click', () => {
+  sfx.blip();
+  if (typing){ clearInterval(typing); typing = null; txtEl.textContent = fullText; return; }
+  nextLine();
+});
+
+/* ---------- STATE ---------- */
+const L = ['A','B','C','D','E','F','G','H'], COLS = 8, ROWS = 6;
+const LAYER_COLORS = ['#588D43', '#9A6759', '#6F4F25', '#262626'];
+let S;
+function newState(name){
+  return { name: name || 'piccolo archeologo', day:1, depth:Array.from({length:COLS}, () => Array(ROWS).fill(0)),
+    finds:[], pending:null, energy:{paul:6, laura:6, muhammad:6}, used:{}, hints:[], sel:'laura',
+    dugTotal:0, dugToday:0, todayFinds:[], allDays:[], phase:'title' };
+}
+const coord = (c, r) => L[c] + (r + 1);
+function rnd(n){ return Math.floor(Math.random() * n); }
+function placeFinds(){
+  const used = { 1:new Set(), 2:new Set(), 3:new Set() };
+  function put(type, cMin, cMax, rMin, rMax){
+    const layer = ITEMS[type].layer; let c, r, k;
+    do { c = cMin + rnd(cMax - cMin + 1); r = rMin + rnd(rMax - rMin + 1); k = c + ',' + r; } while (used[layer].has(k));
+    used[layer].add(k);
+    S.finds.push({ type, col:c, row:r, layer, found:false, documented:false });
+  }
+  put('vaso',1,6,1,4); put('vaso',1,6,1,4);
+  for (let i = 0; i < 5; i++) put('moneta',1,6,1,4);
+  ['lattina','chiave','tappo'].forEach(t => put(t,0,7,0,5));
+  ['coccio','coccio','fibbia'].forEach(t => put(t,0,7,0,5));
+}
+const romanLeft = type => S.finds.filter(f => f.type === type && !f.documented);
+
+/* ---------- HUD ---------- */
+function renderHud(){
+  $('hud').hidden = false;
+  $('day').textContent = 'Giorno ' + S.day;
+  const sl = $('slots'); sl.innerHTML = '';
+  const docV = S.finds.filter(f => f.type === 'vaso' && f.documented).length;
+  const docM = S.finds.filter(f => f.type === 'moneta' && f.documented).length;
+  for (let i = 0; i < 2; i++){ const im = itemImg('vaso', i < docV ? 'got' : ''); sl.appendChild(im); }
+  for (let i = 0; i < 5; i++){ const im = itemImg('moneta', i < docM ? 'got' : ''); sl.appendChild(im); }
+  sl.setAttribute('aria-label', `Vasi trovati ${docV} su 2, monete trovate ${docM} su 5`);
+}
+
+/* ---------- TITLE ---------- */
+const view = $('view');
+function showTitle(){
+  $('hud').hidden = true; dlg.hidden = true;
+  view.innerHTML = '<div class="boot" id="boot"></div>';
+  const lines = [
+    '    **** MISSIONE ARCHEOLOGIA 64 ****',
+    '',
+    ' 64K DI TERRA PRONTA, 7 REPERTI NASCOSTI',
+    '',
+    'READY.',
+    'LOAD "VILLA ROMANA",8,1',
+    '',
+    'SEARCHING FOR VILLA ROMANA',
+    'LOADING',
+    'READY.',
+    'RUN'
+  ];
+  const boot = $('boot');
+  if (reduce){ boot.textContent = lines.join('\n'); setTimeout(titleMenu, 400); return; }
+  let li = 0, ci = 0, out = '';
+  const t = setInterval(() => {
+    if (li >= lines.length){ clearInterval(t); setTimeout(titleMenu, 500); return; }
+    const line = lines[li];
+    if (ci <= line.length){ boot.innerHTML = escapeHtml(out + line.slice(0, ci)) + '<span class="cursor"></span>'; ci += 3; }
+    else { out += line + '\n'; li++; ci = 0; if (li % 3 === 0) tone(330 + li*20, .03); }
+  }, 18);
+}
+function escapeHtml(s){ return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function titleMenu(){
+  view.innerHTML = `
+    <div class="title">
+      <h1 class="px">La villa romana</h1>
+      <div class="sub">Una missione di scavo archeologico</div>
+      <div class="team-row" id="teamRow"></div>
+      <div class="namebox">
+        <label for="nm">Come ti chiami, giovane archeologo?</label>
+        <input id="nm" maxlength="16" autocomplete="off" placeholder="Il tuo nome">
+        <button id="go" type="button">Inizia la missione</button>
+      </div>
+    </div>`;
+  const row = $('teamRow');
+  TEAM.forEach(t => {
+    const f = document.createElement('figure');
+    f.appendChild(charCanvas(t.id, 6));
+    const cap = document.createElement('figcaption'); cap.innerHTML = `<b>${t.name}</b>${t.from}`;
+    f.appendChild(cap); row.appendChild(f);
+  });
+  $('go').addEventListener('click', () => { sfx.ok(); startGame($('nm').value.trim()); });
+  $('nm').addEventListener('keydown', e => { if (e.key === 'Enter') $('go').click(); });
+}
+
+/* ---------- INTRO ---------- */
+function startGame(name){
+  S = newState(name); placeFinds(); renderHud();
+  view.innerHTML = '';
+  const row = document.createElement('div'); row.className = 'team-row';
+  TEAM.forEach(t => { const f = document.createElement('figure'); f.appendChild(charCanvas(t.id, 6));
+    const cap = document.createElement('figcaption'); cap.innerHTML = `<b>${t.name}</b>${t.from}`; f.appendChild(cap); row.appendChild(f); });
+  view.appendChild(row);
+  const n = S.name;
+  talk([
+    ['paul', `Hello, ${n}! Sono Paul e vengo dall’Inghilterra. Amo leggere i testi antichi: sono fonti preziose!`],
+    ['laura', `Ciao! Io sono Laura, archeologa italiana. Con la mia cazzuola so scavare strato dopo strato.`],
+    ['muhammad', `Salam! Sono Muhammad e vengo dall’Egitto. Il mio lavoro preferito è documentare: foto, disegni e schede.`],
+    ['laura', `Noi archeologi siamo detective del passato. La nostra missione: trovare 2 vasi e 5 monete di epoca romana!`],
+    ['paul', `Prima di tutto dobbiamo trovare il sito archeologico, cioè il posto giusto dove scavare. Andiamo!`]
+  ], phaseSito);
+}
+
+/* ---------- PHASE 1: SITO ---------- */
+let mapCtx, mapState = { text:false, aerial:false, sat:false, blink:true }, mapTimer = null;
+function phaseSito(){
+  S.phase = 'sito';
+  view.innerHTML = `
+    <div class="map-wrap">
+      <div>
+        <canvas id="map" width="320" height="200" aria-label="Mappa della zona: A bosco, B campo di grano vicino al fiume, C paese"></canvas>
+        <div class="zones" id="zones">
+          <button type="button" data-z="A">Zona A · il bosco</button>
+          <button type="button" data-z="B">Zona B · il campo</button>
+          <button type="button" data-z="C">Zona C · il paese</button>
+        </div>
+      </div>
+      <div class="side">
+        <h2 class="px">Le fonti</h2>
+        <div class="stack">
+          <button type="button" id="srcText">Il testo antico</button>
+          <button type="button" id="srcAir">La foto aerea</button>
+          <button type="button" id="srcSat">La foto dal satellite</button>
+        </div>
+        <p class="hint">Usa le fonti come indizi, poi scegli la zona dove scavare.</p>
+      </div>
+    </div>`;
+  mapState = { text:false, aerial:false, sat:false, blink:true };
+  mapCtx = $('map').getContext('2d');
+  drawMap();
+  clearInterval(mapTimer);
+  mapTimer = setInterval(() => { mapState.blink = !mapState.blink; drawMap(); }, 500);
+  $('srcText').onclick = e => { sfx.blip(); mapState.text = true; e.currentTarget.classList.add('done'); drawMap();
+    talk([['paul', 'Il testo antico racconta: «La villa sorgeva in un campo di grano, vicino al fiume, lontano dal bosco.»'],
+          ['paul', 'Ho evidenziato il fiume sulla mappa. Dov’è il campo di grano vicino al fiume?']]); };
+  $('srcAir').onclick = e => { sfx.blip(); mapState.aerial = true; e.currentTarget.classList.add('done'); drawMap();
+    talk([['muhammad', 'Ecco la foto scattata dall’aereo! Nel campo il grano cresce in modo diverso sopra i muri sepolti.'],
+          ['muhammad', 'Vedi quelle linee verdi a forma di stanze? Sotto potrebbero esserci i muri di una villa!']]); };
+  $('srcSat').onclick = e => { sfx.blip(); mapState.sat = true; e.currentTarget.classList.add('done'); drawMap();
+    talk([['laura', 'Anche la foto dal satellite mostra un rettangolo strano: lampeggia sulla mappa. Che indizio!']]); };
+  $('zones').querySelectorAll('button').forEach(b => b.onclick = () => chooseZone(b.dataset.z));
+  say('paul', 'Usiamo le fonti come indizi: il testo antico, la foto aerea e la foto dal satellite. Poi scegli la zona!');
+}
+function chooseZone(z){
+  if (z === 'A'){ sfx.bad(); say('laura', 'Nel bosco? Il testo antico dice che la villa era lontana dal bosco. Riprova!'); return; }
+  if (z === 'C'){ sfx.bad(); say('muhammad', 'Sotto il paese di oggi ci sono case e strade, e le foto non mostrano nulla. Riprova!'); return; }
+  if (!mapState.text && !mapState.aerial && !mapState.sat){ sfx.bad(); say('paul', 'Un buon archeologo non sceglie a caso: guarda almeno una fonte prima di decidere!'); return; }
+  clearInterval(mapTimer); sfx.find();
+  talk([['paul', 'Esatto! Il campo di grano vicino al fiume è il nostro sito archeologico.'],
+        ['muhammad', 'Andiamo sul campo. Prima di scavare però serve la quadrettatura!']], phaseQuadretti);
+}
+function drawMap(){
+  const x = mapCtx;
+  x.fillStyle = '#9AD284'; x.fillRect(0,0,320,200);
+  // forest A
+  for (let j = 0; j < 5; j++) for (let i = 0; i < 7; i++){
+    const tx = 14 + i*17 + (j%2)*8, ty = 14 + j*17;
+    x.fillStyle = '#588D43'; x.fillRect(tx, ty, 12, 10); x.fillRect(tx+3, ty-4, 6, 4);
+    x.fillStyle = '#433900'; x.fillRect(tx+5, ty+10, 2, 4);
+  }
+  // village C
+  x.fillStyle = '#6C6C6C'; x.fillRect(10, 150, 125, 8); x.fillRect(70, 112, 8, 80);
+  [[16,118],[40,118],[90,118],[112,120],[18,166],[44,168],[92,166],[114,170]].forEach(([hx,hy]) => {
+    x.fillStyle = '#E8E8E8'; x.fillRect(hx, hy+6, 18, 14);
+    x.fillStyle = '#68372B'; x.fillRect(hx-2, hy, 22, 7);
+    x.fillStyle = '#352879'; x.fillRect(hx+7, hy+12, 4, 8);
+  });
+  // field B
+  x.fillStyle = '#B8C76F'; x.fillRect(156, 30, 116, 140);
+  x.fillStyle = '#8C9A4A';
+  for (let j = 34; j < 168; j += 6) for (let i = 160; i < 270; i += 8) x.fillRect(i, j, 2, 2);
+  // river
+  for (let y = 0; y < 200; y += 2){
+    const off = Math.round(Math.sin(y/14) * 6);
+    x.fillStyle = mapState.text && mapState.blink ? '#70A4B2' : '#4A8FD8';
+    x.fillRect(288 + off, y, 18, 2);
+  }
+  // aerial crop marks
+  if (mapState.aerial){
+    x.fillStyle = '#588D43';
+    x.fillRect(180,70,64,3); x.fillRect(180,128,64,3); x.fillRect(180,70,3,61); x.fillRect(241,70,3,61);
+    x.fillRect(210,70,3,36); x.fillRect(180,100,33,3); x.fillRect(222,100,22,3);
+  }
+  if (mapState.sat && mapState.blink){
+    x.strokeStyle = '#70A4B2'; x.lineWidth = 2; x.strokeRect(172, 62, 80, 76);
+  }
+  // labels
+  const lab = (t, lx, ly) => { x.fillStyle = '#000'; x.fillRect(lx, ly, 14, 14); x.fillStyle = '#fff';
+    x.font = '10px "Press Start 2P", monospace'; x.textBaseline = 'top'; x.fillText(t, lx+2, ly+3); };
+  lab('A', 4, 4); lab('B', 160, 34); lab('C', 4, 104);
+}
+
+/* ---------- PHASE 2: QUADRETTATURA ---------- */
+function gridMarkup(){
+  return `
+    <div class="frame">
+      <div class="cols lbl-hidden" id="colLbl">${L.map(l => `<span>${l}</span>`).join('')}</div>
+      <div class="rows lbl-hidden" id="rowLbl">${[1,2,3,4,5,6].map(n => `<span>${n}</span>`).join('')}</div>
+      <div class="area" id="area"></div>
+    </div>`;
+}
+function buildCells(onClick){
+  const area = $('area'); area.innerHTML = '';
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++){
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'cell';
+    b.dataset.c = c; b.dataset.r = r; b.setAttribute('aria-label', 'Quadretto ' + coord(c, r));
+    b.addEventListener('click', () => onClick(c, r, b));
+    area.appendChild(b);
+  }
+}
+const cellEl = (c, r) => document.querySelector(`.cell[data-c="${c}"][data-r="${r}"]`);
+let quadTask = null;
+function phaseQuadretti(){
+  S.phase = 'quadretti';
+  view.innerHTML = `<div class="dig"><div>${gridMarkup()}</div>
+    <div class="side"><h2 class="px">La quadrettatura</h2>
+    <p class="hint">Con lo spago dividiamo il terreno in quadretti. Così sapremo sempre dove abbiamo trovato ogni oggetto.</p></div></div>`;
+  quadTask = null;
+  buildCells(quadClick);
+  const area = $('area'); let set = 0;
+  ['tl','tr','bl','br'].forEach(p => {
+    const peg = document.createElement('button'); peg.type = 'button'; peg.className = 'peg ' + p;
+    peg.setAttribute('aria-label', 'Picchetto da piantare');
+    peg.onclick = () => {
+      if (peg.classList.contains('set')) return;
+      peg.classList.add('set'); sfx.dig(); set++;
+      if (set === 4) stringGrid();
+      else say('muhammad', `Picchetto piantato! Ne mancano ${4 - set}.`);
+    };
+    area.appendChild(peg);
+  });
+  talk([['muhammad', 'Piantiamo 4 picchetti agli angoli del terreno. Clicca sui quadratini che lampeggiano!']]);
+}
+function stringGrid(){
+  say('muhammad', 'Ora tendiamo lo spago tra i picchetti...');
+  setTimeout(() => {
+    $('area').classList.add('strung'); $('colLbl').classList.remove('lbl-hidden'); $('rowLbl').classList.remove('lbl-hidden');
+    sfx.ok();
+    talk([['muhammad', 'Ecco i quadretti! Ognuno ha una lettera (la colonna) e un numero (la riga).'],
+          ['laura', 'Proprio come a battaglia navale! Proviamo: clicca il quadretto C4.']], () => { quadTask = [2, 3]; });
+  }, reduce ? 0 : 900);
+}
+function quadClick(c, r, b){
+  if (!quadTask) return;
+  if (c === quadTask[0] && r === quadTask[1]){
+    sfx.ok(); b.classList.add('target');
+    if (quadTask[0] === 2){ quadTask = null; talk([['laura', 'Bravo! Quello è C4. Adesso trova il quadretto F2.']], () => { quadTask = [5, 1]; }); }
+    else { quadTask = null; talk([['laura', 'Perfetto, F2! Sei pronto per lo scavo vero e proprio.']], phaseScavo); }
+  } else {
+    sfx.bad(); b.classList.add('shake'); setTimeout(() => b.classList.remove('shake'), 300);
+    say('laura', `Quello è ${coord(c, r)}. Cerca prima la lettera in alto, poi il numero a sinistra: ${coord(quadTask[0], quadTask[1])}.`);
+  }
+}
+
+/* ---------- PHASE 3: SCAVO ---------- */
+function phaseScavo(){
+  S.phase = 'scavo';
+  view.innerHTML = `<div class="dig">
+    <div>${gridMarkup()}
+      <div class="legend"><span class="top">Gli strati</span>
+        <div><i style="background:${LAYER_COLORS[0]}"></i>Strato 1 · il più recente, la terra di oggi</div>
+        <div><i style="background:${LAYER_COLORS[1]}"></i>Strato 2 · il Medioevo</div>
+        <div><i style="background:${LAYER_COLORS[2]}"></i>Strato 3 · l’età romana, il più antico</div>
+        <div><i style="background:${LAYER_COLORS[3]}"></i>Quadretto finito</div>
+      </div>
+    </div>
+    <div class="side"><h2 class="px">La squadra</h2><div class="cards" id="cards"></div>
+      <p class="howto">Scegli chi scava, poi clicca un quadretto: ogni colpo toglie uno strato.</p></div>
+  </div>`;
+  $('area').classList.add('strung'); $('colLbl').classList.remove('lbl-hidden'); $('rowLbl').classList.remove('lbl-hidden');
+  buildCells(digClick);
+  renderGrid(); renderCards();
+  talk([
+    ['laura', 'Si scava in modo stratigrafico: si comincia dallo strato 1, il più recente, e si scende piano piano.'],
+    ['laura', 'Il colore del quadretto ti dice in che strato sei. Più scendi, più torni indietro nel tempo!'],
+    ['muhammad', 'Se trovate un oggetto, fermi tutti: prima si compila la scheda con foto e appunti. Uno strato scavato non torna più!'],
+    ['paul', 'Ognuno di noi ha 6 colpi di cazzuola al giorno e un aiuto speciale. Usateli bene!']
+  ]);
+}
+function renderGrid(){
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++){
+    const b = cellEl(c, r), d = S.depth[c][r];
+    b.style.setProperty('--c', LAYER_COLORS[d]); b.innerHTML = '';
+    b.setAttribute('aria-label', 'Quadretto ' + coord(c, r) + (d < 3 ? ', strato ' + (d + 1) : ', scavo finito'));
+    const p = S.pending;
+    if (p && p.col === c && p.row === r){ b.appendChild(itemImg(p.type, 'pending')); b.setAttribute('aria-label', 'Reperto da documentare in ' + coord(c, r)); }
+    if (S.finds.some(f => f.documented && ITEMS[f.type].roman && f.col === c && f.row === r)){
+      const fl = document.createElement('span'); fl.className = 'flag'; b.appendChild(fl);
+    }
+    const hinted = S.hints.some(h => (h.t === 'zone' && Math.abs(h.c - c) <= 1 && Math.abs(h.r - r) <= 1) || (h.t === 'col' && h.c === c) || (h.t === 'row' && h.r === r));
+    b.classList.toggle('hint-on', hinted);
+  }
+}
+function renderCards(){
+  const box = $('cards'); box.innerHTML = '';
+  TEAM.forEach(t => {
+    const card = document.createElement('div'); card.className = 'card' + (S.sel === t.id ? ' sel' : '');
+    card.setAttribute('role', 'button'); card.tabIndex = 0;
+    card.setAttribute('aria-label', `Fai scavare ${t.name}, colpi rimasti ${S.energy[t.id]}`);
+    card.appendChild(charCanvas(t.id, 3));
+    const info = document.createElement('div');
+    info.innerHTML = `<div class="nm">${t.name}</div><div class="fr">${t.from}</div>
+      <div class="pips">${Array.from({length:6}, (_, i) => `<span class="${i < S.energy[t.id] ? '' : 'off'}"></span>`).join('')}</div>`;
+    const ab = document.createElement('button'); ab.type = 'button'; ab.textContent = t.ability; ab.title = t.abilityTip;
+    ab.disabled = !!S.used[t.id];
+    ab.onclick = e => { e.stopPropagation(); useAbility(t.id); };
+    info.appendChild(ab); card.appendChild(info);
+    const pick = () => { if (S.energy[t.id] <= 0){ sfx.bad(); say(t.id, `Sono stanc${t.id === 'laura' ? 'a' : 'o'}! Per oggi ho finito i colpi. Scegli qualcun altro.`); return; }
+      S.sel = t.id; sfx.blip(); renderCards(); };
+    card.onclick = pick; card.onkeydown = e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); pick(); } };
+    box.appendChild(card);
+  });
+}
+function useAbility(id){
+  if (S.used[id]) return;
+  if (id === 'paul'){
+    const left = S.finds.filter(f => ITEMS[f.type].roman && !f.found);
+    if (!left.length){ say('paul', 'Le fonti non hanno più segreti: abbiamo già trovato tutto!'); return; }
+    const f = left[rnd(left.length)]; S.hints.push({ t:'zone', c:f.col, r:f.row });
+    say('paul', 'Ho riletto il testo antico: in una stanza della villa, qui intorno, c’è qualcosa di romano! Guarda i quadretti azzurri.');
+  } else if (id === 'laura'){
+    const left = S.finds.filter(f => f.type === 'vaso' && !f.found);
+    if (!left.length){ say('laura', 'Abbiamo già trovato tutti e due i vasi!'); return; }
+    const f = left[rnd(left.length)]; S.hints.push({ t:'col', c:f.col });
+    say('laura', `Io me ne intendo di ceramica: un vaso romano si nasconde nella colonna ${L[f.col]}!`);
+  } else {
+    const left = S.finds.filter(f => f.type === 'moneta' && !f.found);
+    if (!left.length){ say('muhammad', 'Le monete le abbiamo già trovate tutte!'); return; }
+    const f = left[rnd(left.length)]; S.hints.push({ t:'row', r:f.row });
+    say('muhammad', `Secondo i miei appunti c’è una moneta romana nella riga ${f.row + 1}!`);
+  }
+  S.used[id] = true; sfx.ok(); renderGrid(); renderCards();
+}
+function totalEnergy(){ return S.energy.paul + S.energy.laura + S.energy.muhammad; }
+function digClick(c, r, b){
+  const p = S.pending;
+  if (p){
+    if (p.col === c && p.row === r){ openScheda(p); return; }
+    sfx.bad(); say('muhammad', `Fermo! Prima dobbiamo documentare il reperto nel quadretto ${coord(p.col, p.row)}. Cliccaci sopra.`); return;
+  }
+  const d = S.depth[c][r];
+  if (d >= 3){ sfx.bad(); say('laura', `Il quadretto ${coord(c, r)} è finito: abbiamo già scavato tutti i suoi strati.`); return; }
+  if (S.energy[S.sel] <= 0){
+    const other = TEAM.find(t => S.energy[t.id] > 0);
+    if (!other){ endDay(); return; }
+    S.sel = other.id; renderCards();
+  }
+  S.energy[S.sel]--; S.dugTotal++; S.dugToday++; sfx.dig();
+  b.classList.add('shake'); setTimeout(() => b.classList.remove('shake'), 300);
+  const f = S.finds.find(x => !x.found && x.col === c && x.row === r && x.layer === d + 1);
+  if (f){
+    f.found = true; S.pending = f; sfx.find();
+    S.hints = S.hints.filter(h => !(h.t === 'zone' && Math.abs(h.c - c) <= 1 && Math.abs(h.r - r) <= 1 && ITEMS[f.type].roman));
+    say(S.sel, ITEMS[f.type].roman
+      ? `Ehi! C’è qualcosa nel quadretto ${coord(c, r)}... sembra romano! Clicca il reperto per compilare la scheda.`
+      : `Ho trovato un oggetto nel quadretto ${coord(c, r)}! Clicca il reperto per compilare la scheda.`);
+  } else {
+    S.depth[c][r] = d + 1;
+    const msgs = d + 1 === 3
+      ? [`Nel quadretto ${coord(c, r)} abbiamo finito tutti gli strati. Niente qui.`]
+      : [`Tolto lo strato ${d + 1} in ${coord(c, r)}. Ora siamo nello strato ${d + 2}: un po’ più indietro nel tempo!`,
+         `Solo terra nello strato ${d + 1}. Scendiamo piano piano...`,
+         `Niente qui per ora. Anche questo è un indizio!`];
+    say(S.sel, msgs[rnd(msgs.length)]);
+    if (S.energy[S.sel] <= 0){ const o = TEAM.find(t => S.energy[t.id] > 0); if (o) S.sel = o.id; }
+  }
+  renderGrid(); renderCards();
+  if (!S.pending && totalEnergy() === 0) setTimeout(endDay, 700);
+}
+
+/* ---------- SCHEDA ---------- */
+function openModal(html){
+  const m = document.createElement('div'); m.className = 'modal'; m.innerHTML = `<div class="sheet" role="dialog" aria-modal="true">${html}</div>`;
+  $('screen').appendChild(m); return m;
+}
+function openScheda(f){
+  const it = ITEMS[f.type];
+  const n = S.finds.filter(x => x.documented).length + 1;
+  const right = coord(f.col, f.row);
+  const opts = new Set([right]);
+  while (opts.size < 3){
+    const c = Math.max(0, Math.min(7, f.col + rnd(5) - 2)), r = Math.max(0, Math.min(5, f.row + rnd(5) - 2));
+    opts.add(coord(c, r));
+  }
+  const coordOpts = [...opts].sort(() => Math.random() - .5);
+  const m = openModal(`
+    <h2 class="px">Scheda reperto n. ${n}</h2>
+    <div class="photo">
+      <div class="frame-img blank" id="ph"></div>
+      <div><p><b>${it.name}</b></p><p>Prima di fotografarlo, rispondi alle domande.</p></div>
+    </div>
+    <div class="q">In quale quadretto l’hai trovato?</div>
+    <div class="opts" id="q1">${coordOpts.map(o => `<button type="button" data-v="${o}">${o}</button>`).join('')}</div>
+    <div class="q">In quale strato?</div>
+    <div class="opts" id="q2">
+      <button type="button" data-v="1">Strato 1 · oggi</button>
+      <button type="button" data-v="2">Strato 2 · Medioevo</button>
+      <button type="button" data-v="3">Strato 3 · età romana</button>
+    </div>
+    <div class="fb" id="fb"></div>
+    <div class="act"><button type="button" id="shot" disabled>Scatta la foto</button><button type="button" id="save" disabled>Salva la scheda</button></div>`);
+  const ph = m.querySelector('#ph');
+  const cv = spriteCanvas(it.rows, it.colors, 8); cv.style.setProperty('--bg', LAYER_COLORS[f.layer - 1]); ph.appendChild(cv);
+  const fb = m.querySelector('#fb'); let ok1 = false, ok2 = false;
+  const check = () => { m.querySelector('#shot').disabled = !(ok1 && ok2); };
+  m.querySelectorAll('#q1 button').forEach(b => b.onclick = () => {
+    if (ok1) return;
+    if (b.dataset.v === right){ ok1 = true; b.classList.add('ok'); sfx.ok(); fb.textContent = 'Giusto!'; }
+    else { b.classList.add('no'); sfx.bad(); fb.textContent = 'Guarda la lettera in alto e il numero a sinistra del reperto che lampeggia.'; }
+    check();
+  });
+  m.querySelectorAll('#q2 button').forEach(b => b.onclick = () => {
+    if (ok2) return;
+    if (+b.dataset.v === f.layer){ ok2 = true; b.classList.add('ok'); sfx.ok();
+      fb.textContent = f.layer === 3 ? 'Giusto! Lo strato più profondo è il più antico: quello romano.'
+        : f.layer === 2 ? 'Giusto! È più recente dei Romani: sta sopra il loro strato.'
+        : 'Giusto! È nello strato più in alto, quindi è un oggetto di oggi.'; }
+    else { b.classList.add('no'); sfx.bad(); fb.textContent = 'Guarda il colore del quadretto e confrontalo con la colonna degli strati.'; }
+    check();
+  });
+  m.querySelector('#shot').onclick = () => {
+    sfx.photo(); ph.classList.remove('blank');
+    const fl = document.createElement('div'); fl.className = 'flash'; m.appendChild(fl); setTimeout(() => fl.remove(), 600);
+    m.querySelector('#shot').disabled = true; m.querySelector('#save').disabled = false; m.querySelector('#save').focus();
+  };
+  m.querySelector('#save').onclick = () => { m.remove(); saveFind(f); };
+  m.querySelector('#q1 button').focus();
+}
+function saveFind(f){
+  f.documented = true; f.day = S.day; S.pending = null; S.todayFinds.push(f);
+  S.depth[f.col][f.row] = Math.min(3, S.depth[f.col][f.row] + 1);
+  sfx.ok(); renderHud(); renderGrid(); renderCards();
+  const vLeft = romanLeft('vaso').length, mLeft = romanLeft('moneta').length;
+  if (!vLeft && !mLeft){ setTimeout(finish, 500); return; }
+  if (ITEMS[f.type].roman){
+    const what = f.type === 'vaso' ? 'Un vaso romano' : 'Una moneta romana';
+    say('muhammad', `${what} documentato! Ci mancano ancora ${vLeft} vas${vLeft === 1 ? 'o' : 'i'} e ${mLeft} monet${mLeft === 1 ? 'a' : 'e'}.`);
+  } else {
+    say('paul', f.layer === 1 ? 'Non è romano: è un oggetto di oggi! Ma lo documentiamo lo stesso, ogni oggetto racconta qualcosa.'
+                              : 'Del Medioevo: più antico di noi, ma più recente dei Romani. Scheda salvata!');
+  }
+  if (totalEnergy() === 0) setTimeout(endDay, 900);
+}
+
+/* ---------- GIORNALE DI SCAVO ---------- */
+function diaryHtml(dayNum, dug, finds){
+  const items = finds.length
+    ? `<ul>${finds.map(f => `<li>${ITEMS[f.type].name} nel quadretto ${coord(f.col, f.row)}, strato ${f.layer}.</li>`).join('')}</ul>
+       <div class="sketches">${finds.map(f => `<img class="sp" src="${IMG[f.type]}" alt="${ITEMS[f.type].name}">`).join('')}</div>`
+    : `<p>Oggi niente reperti, ma ora conosciamo meglio il terreno.</p>`;
+  return `<div class="diary"><p>Giorno ${dayNum}. Oggi la squadra ha tolto ${dug} strati di terra.</p>${items}</div>`;
+}
+function endDay(){
+  if (S.phase !== 'scavo' || document.querySelector('.modal')) return;
+  S.allDays.push({ day:S.day, dug:S.dugToday, finds:S.todayFinds.slice() });
+  const m = openModal(`<h2 class="px">Giornale di scavo</h2>
+    <p>${S.name === 'piccolo archeologo' ? 'Il diario della squadra' : 'Il diario di ' + escapeHtml(S.name)}: tutto ciò che è successo oggi.</p>
+    ${diaryHtml(S.day, S.dugToday, S.todayFinds)}
+    <div class="act"><button type="button" id="sleep">Inizia il giorno ${S.day + 1}</button></div>`);
+  sfx.blip();
+  m.querySelector('#sleep').focus();
+  m.querySelector('#sleep').onclick = () => {
+    m.remove(); S.day++; S.energy = { paul:6, laura:6, muhammad:6 }; S.used = {}; S.hints = [];
+    S.dugToday = 0; S.todayFinds = []; renderHud(); renderGrid(); renderCards();
+    say('laura', `Buongiorno! È il giorno ${S.day}. Abbiamo di nuovo tutti i colpi di cazzuola e i nostri aiuti speciali.`);
+  };
+}
+
+/* ---------- FINE ---------- */
+function finish(){
+  S.phase = 'fine';
+  S.allDays.push({ day:S.day, dug:S.dugToday, finds:S.todayFinds.slice() });
+  sfx.win();
+  const stars = S.day <= 3 ? 3 : S.day <= 4 ? 2 : 1;
+  const others = S.finds.filter(f => f.documented && !ITEMS[f.type].roman).length;
+  const m = openModal(`<h2 class="px">Missione compiuta!</h2>
+    <p>Bravissimo, ${escapeHtml(S.name)}! Hai trovato 2 vasi e 5 monete romane in ${S.day} giorn${S.day === 1 ? 'o' : 'i'} di scavo.</p>
+    <div class="stars" aria-label="${stars} stelle su 3">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</div>
+    <p>Strati scavati: ${S.dugTotal}. Altri oggetti documentati: ${others}.</p>
+    <p>Hai scavato strato dopo strato, dal più recente al più antico, e hai documentato ogni oggetto: ora sei un vero detective del passato!</p>
+    <h2 class="px" style="margin-top:14px">Giornale di scavo</h2>
+    ${S.allDays.map(d => diaryHtml(d.day, d.dug, d.finds)).join('')}
+    <div class="act"><button type="button" id="again">Gioca ancora</button></div>`);
+  m.querySelector('#again').onclick = () => { m.remove(); dlg.hidden = true; titleMenu(); $('hud').hidden = true; };
+  m.querySelector('#again').focus();
+  say('paul', `Thank you, ${S.name}! Hai scavato strato dopo strato e documentato tutto: ora sei un vero detective del passato!`);
+}
+
+showTitle();
+})();
+</script>
+</body>
+</html>
