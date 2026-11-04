@@ -196,6 +196,31 @@ button.ghost:hover{ background:var(--panel); }
   .dialog .face canvas{ width:36px; height:48px; }
   .dialog .txt{ font-size:21px; }
 }
+
+/* simulazione */
+.actors{ position:absolute; inset:0; pointer-events:none; z-index:2; }
+.actor{ position:absolute; width:12.5%; aspect-ratio:3/4; transform:translateY(-100%); }
+.actor img{ width:100%; height:100%; display:block; }
+.actor.sel::before{
+  content:""; position:absolute; left:50%; top:-12px; width:9px; height:9px; margin-left:-4px;
+  background:var(--lightgreen); border:2px solid #000; transform:rotate(45deg); animation:bob 1s ease-in-out infinite;
+}
+@keyframes bob{ 50%{ top:-17px; } }
+.actor .tag{ position:absolute; left:50%; bottom:-12px; transform:translateX(-50%); background:#000; color:#fff;
+  font-family:'Press Start 2P','Courier New',monospace; font-size:7px; padding:2px 3px; white-space:nowrap; }
+.actor .bubble{ position:absolute; bottom:100%; left:50%; transform:translate(-50%, -16px); background:#fff; color:#000;
+  border:2px solid #000; font-size:18px; padding:1px 6px; white-space:nowrap; z-index:5; }
+.actor .bubble.edge-l{ left:0; transform:translate(0, -16px); }
+.actor .bubble.edge-r{ left:auto; right:0; transform:translate(0, -16px); }
+.dirt{ position:absolute; width:5px; height:5px; animation:dirt .6s ease-out forwards; }
+@keyframes dirt{ 50%{ transform:translate(calc(var(--dx) * .6), var(--dy)); } 100%{ transform:translate(var(--dx), 8px); opacity:0; } }
+.cell.digging::before{ content:""; position:absolute; inset:3px; border:2px dashed var(--yellow); animation:blink .4s steps(1) infinite; pointer-events:none; }
+.brush{ position:relative; width:160px; height:160px; margin:8px auto; border:3px solid #000; }
+.brush canvas{ position:absolute; inset:0; width:100%; height:100%; image-rendering:pixelated; }
+#bDirt{ cursor:crosshair; touch-action:none; }
+.bar{ height:10px; background:#c9c1a0; margin:8px auto; width:160px; border:2px solid #000; }
+.bar span{ display:block; height:100%; width:0; background:#588D43; }
+@media (max-width:680px){ .actor .tag{ display:none; } .actor .bubble{ font-size:16px; } }
 @media (prefers-reduced-motion: reduce){
   *{ animation:none !important; transition:none !important; }
 }
@@ -255,6 +280,15 @@ const TEAM = [
     ability:'Fiuto per le monete', abilityTip:'Mostra la riga di una moneta' }
 ];
 TEAM.forEach(t => { t.rows = HEADS[t.id].concat(BODY); });
+const BODIES = {
+  idle: BODY,
+  walk: ["..SSSSSSSS..",".SSSSSSSSSS.",".sSSSSSSSSs.",".sSSSSSSSSs.","...PPPPPP...","...PPPPPP...","..PP....PP..",".PP......PP.",".BB......BB."],
+  dig1: ["..SSSSSSSSsT",".SSSSSSSSSs.",".sSSSSSSSS..",".sSSSSSSSS..","...PPPPPP...","..PPPPPPPP..","..PPP..PPPP.","..BBB...BBB.","............"],
+  dig2: ["..SSSSSSSS..",".SSSSSSSSSS.",".sSSSSSSSSs.",".sSSSSSSSSSs","...PPPPPP..s","..PPPPPPPP.T","..PPP..PPPPT","..BBB...BBB.","............"]
+};
+const FRAMES = {};
+TEAM.forEach(t => { FRAMES[t.id] = {}; Object.keys(BODIES).forEach(k => {
+  FRAMES[t.id][k] = spriteCanvas(HEADS[t.id].concat(BODIES[k]), Object.assign({}, t.colors, { T:'#CFCFCF' }), 4).toDataURL(); }); });
 
 const ITEMS = {
   vaso:{ name:'Vaso romano', roman:true, layer:3,
@@ -357,7 +391,7 @@ const LAYER_COLORS = ['#588D43', '#9A6759', '#6F4F25', '#262626'];
 let S;
 function newState(name){
   return { name: name || 'piccolo archeologo', day:1, depth:Array.from({length:COLS}, () => Array(ROWS).fill(0)),
-    finds:[], pending:null, energy:{paul:6, laura:6, muhammad:6}, used:{}, hints:[], sel:'laura',
+    finds:[], pendings:[], reached:{}, energy:{paul:6, laura:6, muhammad:6}, used:{}, hints:[], sel:'laura',
     dugTotal:0, dugToday:0, todayFinds:[], allDays:[], phase:'title' };
 }
 const coord = (c, r) => L[c] + (r + 1);
@@ -610,7 +644,9 @@ function quadClick(c, r, b){
   }
 }
 
-/* ---------- PHASE 3: SCAVO ---------- */
+/* ---------- PHASE 3: SCAVO (simulazione) ---------- */
+const HOME = { paul:[1.2, 5], laura:[3.4, 5], muhammad:[5.6, 5] };
+let actors = {}, busyCells = new Set();
 function phaseScavo(){
   S.phase = 'scavo';
   view.innerHTML = `<div class="dig">
@@ -623,54 +659,143 @@ function phaseScavo(){
       </div>
     </div>
     <div class="side"><h2 class="px">La squadra</h2><div class="cards" id="cards"></div>
-      <p class="howto">Scegli chi scava, poi clicca un quadretto: ogni colpo toglie uno strato.</p></div>
+      <p class="howto">Scegli un archeologo (o premi 1, 2, 3), poi clicca un quadretto: andrà lì a scavare. Possono lavorare tutti e tre insieme!</p></div>
   </div>`;
   $('area').classList.add('strung'); $('colLbl').classList.remove('lbl-hidden'); $('rowLbl').classList.remove('lbl-hidden');
   buildCells(digClick);
+  makeActors();
   renderGrid(); renderCards();
   talk([
-    ['laura', 'Si scava in modo stratigrafico: si comincia dallo strato 1, il più recente, e si scende piano piano.'],
-    ['laura', 'Il colore del quadretto ti dice in che strato sei. Più scendi, più torni indietro nel tempo!'],
-    ['muhammad', 'Se trovate un oggetto, fermi tutti: prima si compila la scheda con foto e appunti. Uno strato scavato non torna più!'],
-    ['paul', 'Ognuno di noi ha 6 colpi di cazzuola al giorno e un aiuto speciale. Usateli bene!']
+    ['laura', 'Eccoci sul campo! Si scava in modo stratigrafico: prima lo strato 1, il più recente, poi piano piano si scende.'],
+    ['laura', 'Scegli uno di noi e clicca un quadretto: andremo lì e scaveremo con la cazzuola, uno strato alla volta.'],
+    ['muhammad', 'Se troviamo un oggetto, fermi tutti! Prima lo puliamo col pennello e compiliamo la scheda. Uno strato scavato non torna più!'],
+    ['paul', 'Ognuno di noi ha 6 colpi di cazzuola al giorno e un aiuto speciale. Il rombo verde indica chi hai scelto. Al lavoro!']
   ]);
+}
+function makeActors(){
+  const layer = document.createElement('div'); layer.className = 'actors'; layer.id = 'actors';
+  $('area').appendChild(layer);
+  actors = {}; busyCells = new Set();
+  TEAM.forEach(t => {
+    const el = document.createElement('div'); el.className = 'actor';
+    const bub = document.createElement('div'); bub.className = 'bubble'; bub.hidden = true;
+    const img = document.createElement('img'); img.className = 'sp'; img.alt = t.name; img.src = FRAMES[t.id].idle;
+    const tag = document.createElement('div'); tag.className = 'tag'; tag.textContent = t.name;
+    el.append(bub, img, tag); layer.appendChild(el);
+    actors[t.id] = { id:t.id, x:HOME[t.id][0], y:HOME[t.id][1], face:1, el, img, bub, busy:false, bubT:null };
+    placeActor(actors[t.id]);
+  });
+}
+function resetActors(){
+  TEAM.forEach(t => { const a = actors[t.id]; if (!a) return; a.x = HOME[t.id][0]; a.y = HOME[t.id][1]; a.face = 1; a.busy = false; setFrame(a, 'idle'); placeActor(a); });
+  busyCells = new Set();
+}
+function placeActor(a){
+  a.el.style.left = (a.x * 12.5) + '%';
+  a.el.style.top = ((a.y + 1) * 100 / 6) + '%';
+  a.el.style.zIndex = 10 + Math.round(a.y * 10);
+  a.img.style.transform = a.face < 0 ? 'scaleX(-1)' : '';
+  a.el.classList.toggle('sel', S.sel === a.id);
+}
+function renderSel(){ Object.values(actors).forEach(placeActor); }
+function setFrame(a, f){ a.img.src = FRAMES[a.id][f]; }
+function bubble(a, text, ms){
+  a.bub.textContent = text; a.bub.hidden = false; clearTimeout(a.bubT);
+  a.bub.classList.toggle('edge-l', a.x < 2); a.bub.classList.toggle('edge-r', a.x > 5.5);
+  a.bubT = setTimeout(() => { a.bub.hidden = true; }, ms || 1600);
+}
+function walkTo(a, tx, ty, done){
+  const speed = 2.6; let last = performance.now(), ft = 0, step = false;
+  if (Math.abs(tx - a.x) > .05) a.face = tx > a.x ? 1 : -1;
+  const game = S;
+  function tick(now){
+    if (S !== game || S.phase !== 'scavo') return;
+    const dt = Math.min(.05, (now - last) / 1000); last = now;
+    const dx = tx - a.x, dy = ty - a.y, dist = Math.hypot(dx, dy), mv = speed * dt;
+    if (dist <= mv || reduce){ a.x = tx; a.y = ty; setFrame(a, 'idle'); placeActor(a); done(); return; }
+    a.x += dx / dist * mv; a.y += dy / dist * mv;
+    ft += dt; if (ft > .13){ ft = 0; step = !step; setFrame(a, step ? 'walk' : 'idle'); }
+    placeActor(a); requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+function dirt(c, r, color){
+  const layer = $('actors'); if (!layer || reduce) return;
+  for (let i = 0; i < 6; i++){
+    const d = document.createElement('i'); d.className = 'dirt';
+    d.style.left = ((c + .3 + Math.random() * .4) * 12.5) + '%';
+    d.style.top = ((r + .4 + Math.random() * .3) * 100 / 6) + '%';
+    d.style.background = color;
+    d.style.setProperty('--dx', (Math.random() * 36 - 18) + 'px');
+    d.style.setProperty('--dy', (-12 - Math.random() * 22) + 'px');
+    layer.appendChild(d); setTimeout(() => d.remove(), 650);
+  }
+}
+function digAnim(a, c, r, done){
+  const strokes = reduce ? 1 : 5; let i = 0; const game = S;
+  const iv = setInterval(() => {
+    if (S !== game || S.phase !== 'scavo'){ clearInterval(iv); return; }
+    const down = i % 2 === 1;
+    setFrame(a, down ? 'dig2' : 'dig1');
+    if (down){ dirt(c, r, LAYER_COLORS[S.depth[c][r]]); tone(120 + rnd(40), .05, 0, 'triangle'); }
+    i++;
+    if (i >= strokes * 2){ clearInterval(iv); setFrame(a, 'idle'); done(); }
+  }, 210);
 }
 function renderGrid(){
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++){
     const b = cellEl(c, r), d = S.depth[c][r];
-    b.style.setProperty('--c', LAYER_COLORS[d]); b.innerHTML = '';
+    b.style.setProperty('--c', LAYER_COLORS[d]);
+    [...b.querySelectorAll('img, .flag')].forEach(n => n.remove());
     b.setAttribute('aria-label', 'Quadretto ' + coord(c, r) + (d < 3 ? ', strato ' + (d + 1) : ', scavo finito'));
-    const p = S.pending;
-    if (p && p.col === c && p.row === r){ b.appendChild(itemImg(p.type, 'pending')); b.setAttribute('aria-label', 'Reperto da documentare in ' + coord(c, r)); }
+    const p = S.pendings.find(x => x.col === c && x.row === r);
+    if (p){ b.appendChild(itemImg(p.type, 'pending')); b.setAttribute('aria-label', 'Reperto da pulire e documentare in ' + coord(c, r)); }
     if (S.finds.some(f => f.documented && ITEMS[f.type].roman && f.col === c && f.row === r)){
       const fl = document.createElement('span'); fl.className = 'flag'; b.appendChild(fl);
     }
     const hinted = S.hints.some(h => (h.t === 'zone' && Math.abs(h.c - c) <= 1 && Math.abs(h.r - r) <= 1) || (h.t === 'col' && h.c === c) || (h.t === 'row' && h.r === r));
     b.classList.toggle('hint-on', hinted);
+    b.classList.toggle('digging', busyCells.has(c + ',' + r));
+  }
+}
+function selectActor(id){
+  if (!TEAM.some(t => t.id === id)) return;
+  S.sel = id; sfx.blip(); renderCards(); renderSel();
+  const a = actors[id];
+  if (a){
+    const t = TEAM.find(x => x.id === id);
+    bubble(a, a.busy ? 'Sto scavando!' : S.energy[id] <= 0 ? 'Sono stanc' + (id === 'laura' ? 'a' : 'o') + '...' : 'Pronto' + (id === 'laura' ? 'a' : '') + '!', 1100);
   }
 }
 function renderCards(){
-  const box = $('cards'); box.innerHTML = '';
+  const box = $('cards'); if (!box) return; box.innerHTML = '';
   TEAM.forEach(t => {
+    const a = actors[t.id];
+    const status = a && a.busy ? 'sta scavando…' : S.energy[t.id] <= 0 ? 'stanc' + (t.id === 'laura' ? 'a' : 'o') + ' per oggi' : 'pront' + (t.id === 'laura' ? 'a' : 'o');
     const card = document.createElement('div'); card.className = 'card' + (S.sel === t.id ? ' sel' : '');
     card.setAttribute('role', 'button'); card.tabIndex = 0;
-    card.setAttribute('aria-label', `Fai scavare ${t.name}, colpi rimasti ${S.energy[t.id]}`);
+    card.setAttribute('aria-label', `Scegli ${t.name}, ${status}, colpi rimasti ${S.energy[t.id]}`);
     card.appendChild(charCanvas(t.id, 3));
     const info = document.createElement('div');
-    info.innerHTML = `<div class="nm">${t.name}</div><div class="fr">${t.from}</div>
+    info.innerHTML = `<div class="nm">${t.name}</div><div class="fr">${status}</div>
       <div class="pips">${Array.from({length:6}, (_, i) => `<span class="${i < S.energy[t.id] ? '' : 'off'}"></span>`).join('')}</div>`;
     const ab = document.createElement('button'); ab.type = 'button'; ab.textContent = t.ability; ab.title = t.abilityTip;
     ab.disabled = !!S.used[t.id];
     ab.onclick = e => { e.stopPropagation(); useAbility(t.id); };
     info.appendChild(ab); card.appendChild(info);
-    const pick = () => { if (S.energy[t.id] <= 0){ sfx.bad(); say(t.id, `Sono stanc${t.id === 'laura' ? 'a' : 'o'}! Per oggi ho finito i colpi. Scegli qualcun altro.`); return; }
-      S.sel = t.id; sfx.blip(); renderCards(); };
-    card.onclick = pick; card.onkeydown = e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); pick(); } };
+    card.onclick = () => selectActor(t.id);
+    card.onkeydown = e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); selectActor(t.id); } };
     box.appendChild(card);
   });
 }
+document.addEventListener('keydown', e => {
+  if (!S || S.phase !== 'scavo' || document.querySelector('.modal') || e.target.tagName === 'INPUT') return;
+  const map = { '1':'paul', '2':'laura', '3':'muhammad' };
+  if (map[e.key]) selectActor(map[e.key]);
+});
 function useAbility(id){
   if (S.used[id]) return;
+  const a = actors[id];
   if (id === 'paul'){
     const left = S.finds.filter(f => ITEMS[f.type].roman && !f.found);
     if (!left.length){ say('paul', 'Le fonti non hanno più segreti: abbiamo già trovato tutto!'); return; }
@@ -687,43 +812,68 @@ function useAbility(id){
     const f = left[rnd(left.length)]; S.hints.push({ t:'row', r:f.row });
     say('muhammad', `Secondo i miei appunti c’è una moneta romana nella riga ${f.row + 1}!`);
   }
+  if (a) bubble(a, 'Ho un’idea!', 1400);
   S.used[id] = true; sfx.ok(); renderGrid(); renderCards();
 }
 function totalEnergy(){ return S.energy.paul + S.energy.laura + S.energy.muhammad; }
+const anyBusy = () => Object.values(actors).some(a => a.busy);
 function digClick(c, r, b){
-  const p = S.pending;
-  if (p){
-    if (p.col === c && p.row === r){ openScheda(p); return; }
-    sfx.bad(); say('muhammad', `Fermo! Prima dobbiamo documentare il reperto nel quadretto ${coord(p.col, p.row)}. Cliccaci sopra.`); return;
+  const pend = S.pendings.find(p => p.col === c && p.row === r);
+  if (pend){ openScheda(pend); return; }
+  if (S.pendings.length){
+    const p = S.pendings[0]; sfx.bad();
+    say('muhammad', `Fermi tutti! Prima puliamo e documentiamo il reperto nel quadretto ${coord(p.col, p.row)}. Cliccaci sopra.`); return;
   }
+  if (busyCells.has(c + ',' + r)){ sfx.bad(); say(S.sel, `Qualcuno sta già scavando nel quadretto ${coord(c, r)}!`); return; }
+  if (S.depth[c][r] >= 3){ sfx.bad(); say('laura', `Il quadretto ${coord(c, r)} è finito: abbiamo già scavato tutti i suoi strati.`); return; }
+  let a = actors[S.sel];
+  if (a.busy || S.energy[a.id] <= 0){
+    const other = TEAM.map(t => actors[t.id]).find(x => !x.busy && S.energy[x.id] > 0);
+    if (!other){
+      sfx.bad();
+      say(S.sel, totalEnergy() === 0 ? 'Abbiamo finito i colpi di oggi: aspettiamo che finisca l’ultimo scavo.' : 'Siamo tutti al lavoro! Aspetta che qualcuno finisca.');
+      return;
+    }
+    a = other; S.sel = other.id;
+  }
+  S.energy[a.id]--; a.busy = true; busyCells.add(c + ',' + r); sfx.blip();
+  bubble(a, 'Vado in ' + coord(c, r) + '!', 1300);
+  renderCards(); renderSel(); renderGrid();
+  const sx = c > 0 ? c - .55 : c + .55;
+  walkTo(a, sx, r, () => {
+    a.face = sx < c ? 1 : -1; placeActor(a);
+    digAnim(a, c, r, () => finishDig(a, c, r));
+  });
+}
+function finishDig(a, c, r){
+  busyCells.delete(c + ',' + r); a.busy = false; S.dugTotal++; S.dugToday++;
   const d = S.depth[c][r];
-  if (d >= 3){ sfx.bad(); say('laura', `Il quadretto ${coord(c, r)} è finito: abbiamo già scavato tutti i suoi strati.`); return; }
-  if (S.energy[S.sel] <= 0){
-    const other = TEAM.find(t => S.energy[t.id] > 0);
-    if (!other){ endDay(); return; }
-    S.sel = other.id; renderCards();
-  }
-  S.energy[S.sel]--; S.dugTotal++; S.dugToday++; sfx.dig();
-  b.classList.add('shake'); setTimeout(() => b.classList.remove('shake'), 300);
   const f = S.finds.find(x => !x.found && x.col === c && x.row === r && x.layer === d + 1);
   if (f){
-    f.found = true; S.pending = f; sfx.find();
-    S.hints = S.hints.filter(h => !(h.t === 'zone' && Math.abs(h.c - c) <= 1 && Math.abs(h.r - r) <= 1 && ITEMS[f.type].roman));
-    say(S.sel, ITEMS[f.type].roman
-      ? `Ehi! C’è qualcosa nel quadretto ${coord(c, r)}... sembra romano! Clicca il reperto per compilare la scheda.`
-      : `Ho trovato un oggetto nel quadretto ${coord(c, r)}! Clicca il reperto per compilare la scheda.`);
+    f.found = true; S.pendings.push(f); sfx.find();
+    bubble(a, 'Ho trovato qualcosa!', 2600);
+    S.hints = S.hints.filter(h => !(ITEMS[f.type].roman && h.t === 'zone' && Math.abs(h.c - c) <= 1 && Math.abs(h.r - r) <= 1));
+    say(a.id, ITEMS[f.type].roman
+      ? `Ehi! Nel quadretto ${coord(c, r)} spunta qualcosa... sembra romano! Clicca il reperto: prima lo puliamo col pennello.`
+      : `Nel quadretto ${coord(c, r)} c’è un oggetto! Clicca il reperto per pulirlo e fare la scheda.`);
   } else {
     S.depth[c][r] = d + 1;
-    const msgs = d + 1 === 3
-      ? [`Nel quadretto ${coord(c, r)} abbiamo finito tutti gli strati. Niente qui.`]
-      : [`Tolto lo strato ${d + 1} in ${coord(c, r)}. Ora siamo nello strato ${d + 2}: un po’ più indietro nel tempo!`,
-         `Solo terra nello strato ${d + 1}. Scendiamo piano piano...`,
-         `Niente qui per ora. Anche questo è un indizio!`];
-    say(S.sel, msgs[rnd(msgs.length)]);
-    if (S.energy[S.sel] <= 0){ const o = TEAM.find(t => S.energy[t.id] > 0); if (o) S.sel = o.id; }
+    const nd = d + 1;
+    if (nd < 3 && !S.reached[nd + 1]){
+      S.reached[nd + 1] = true;
+      say(a.id, nd + 1 === 2
+        ? 'Siamo arrivati allo strato 2: il Medioevo! Scendendo torniamo indietro nel tempo.'
+        : 'Ecco lo strato 3: l’età romana! È il più profondo, quindi il più antico. Qui cerchiamo vasi e monete.');
+    }
+    const lines = nd === 3 ? ['Quadretto finito!', 'Niente qui.'] : ['Strato tolto!', 'Solo terra...', 'Scendiamo piano piano', 'Niente, per ora'];
+    bubble(a, lines[rnd(lines.length)], 1500);
   }
-  renderGrid(); renderCards();
-  if (!S.pending && totalEnergy() === 0) setTimeout(endDay, 700);
+  if (S.energy[a.id] <= 0 && S.sel === a.id){ const o = TEAM.find(t => S.energy[t.id] > 0 && !actors[t.id].busy); if (o) S.sel = o.id; }
+  renderGrid(); renderCards(); renderSel(); maybeEndDay();
+}
+function maybeEndDay(){
+  const ready = () => S.phase === 'scavo' && totalEnergy() === 0 && !S.pendings.length && !anyBusy() && !document.querySelector('.modal');
+  if (ready()) setTimeout(() => { if (ready()) endDay(); }, 900);
 }
 
 /* ---------- SCHEDA ---------- */
@@ -743,22 +893,62 @@ function openScheda(f){
   const coordOpts = [...opts].sort(() => Math.random() - .5);
   const m = openModal(`
     <h2 class="px">Scheda reperto n. ${n}</h2>
-    <div class="photo">
-      <div class="frame-img blank" id="ph"></div>
-      <div><p><b>${it.name}</b></p><p>Prima di fotografarlo, rispondi alle domande.</p></div>
+    <div id="brushStep">
+      <p>Il reperto è ancora sporco di terra. Passa il pennello: trascina il dito o il mouse sopra la terra.</p>
+      <div class="brush"><canvas id="bItem" width="160" height="160"></canvas><canvas id="bDirt" width="160" height="160" aria-label="Terra da spazzolare"></canvas></div>
+      <div class="bar"><span id="bProg"></span></div>
+      <div class="act" style="justify-content:center"><button type="button" id="bBtn">Usa il pennello</button></div>
     </div>
-    <div class="q">In quale quadretto l’hai trovato?</div>
-    <div class="opts" id="q1">${coordOpts.map(o => `<button type="button" data-v="${o}">${o}</button>`).join('')}</div>
-    <div class="q">In quale strato?</div>
-    <div class="opts" id="q2">
-      <button type="button" data-v="1">Strato 1 · oggi</button>
-      <button type="button" data-v="2">Strato 2 · Medioevo</button>
-      <button type="button" data-v="3">Strato 3 · età romana</button>
-    </div>
-    <div class="fb" id="fb"></div>
-    <div class="act"><button type="button" id="shot" disabled>Scatta la foto</button><button type="button" id="save" disabled>Salva la scheda</button></div>`);
+    <div id="docStep" hidden>
+      <div class="photo">
+        <div class="frame-img blank" id="ph"></div>
+        <div><p><b>${it.name}</b></p><p>Ora che è pulito, rispondi alle domande e scatta la foto.</p></div>
+      </div>
+      <div class="q">In quale quadretto l’hai trovato?</div>
+      <div class="opts" id="q1">${coordOpts.map(o => `<button type="button" data-v="${o}">${o}</button>`).join('')}</div>
+      <div class="q">In quale strato?</div>
+      <div class="opts" id="q2">
+        <button type="button" data-v="1">Strato 1 · oggi</button>
+        <button type="button" data-v="2">Strato 2 · Medioevo</button>
+        <button type="button" data-v="3">Strato 3 · età romana</button>
+      </div>
+      <div class="fb" id="fb"></div>
+      <div class="act"><button type="button" id="shot" disabled>Scatta la foto</button><button type="button" id="save" disabled>Salva la scheda</button></div>
+    </div>`);
+  // --- pennello ---
+  const ground = LAYER_COLORS[f.layer - 1];
+  const bi = m.querySelector('#bItem').getContext('2d');
+  bi.fillStyle = ground; bi.fillRect(0, 0, 160, 160);
+  bi.imageSmoothingEnabled = false; bi.drawImage(spriteCanvas(it.rows, it.colors, 1), 0, 0, 10, 10, 16, 16, 128, 128);
+  const dc = m.querySelector('#bDirt'), dx = dc.getContext('2d');
+  dx.fillStyle = '#5a3d1c'; dx.fillRect(0, 0, 160, 160);
+  for (let i = 0; i < 260; i++){ dx.fillStyle = ['#6F4F25', '#433900', '#7d5a2c', '#9A6759'][rnd(4)]; dx.fillRect(rnd(40) * 4, rnd(40) * 4, 4, 4); }
+  let cleaned = false, lastSnd = 0;
+  const prog = m.querySelector('#bProg');
+  function measure(){
+    const d = dx.getImageData(0, 0, 160, 160).data; let clear = 0, tot = 0;
+    for (let i = 3; i < d.length; i += 64){ tot++; if (d[i] < 100) clear++; }
+    const pct = clear / tot; prog.style.width = Math.min(100, pct / .7 * 100) + '%';
+    if (pct >= .7 && !cleaned){
+      cleaned = true; dx.clearRect(0, 0, 160, 160); sfx.ok();
+      setTimeout(() => { m.querySelector('#brushStep').hidden = true; m.querySelector('#docStep').hidden = false; m.querySelector('#q1 button').focus(); }, reduce ? 0 : 600);
+    }
+  }
+  function brushAt(x, y){
+    dx.save(); dx.globalCompositeOperation = 'destination-out';
+    for (let i = 0; i < 4; i++){ dx.fillRect(Math.round((x - 12 + rnd(24)) / 4) * 4, Math.round((y - 12 + rnd(24)) / 4) * 4, 12, 12); }
+    dx.restore();
+    const now = performance.now(); if (now - lastSnd > 90){ lastSnd = now; tone(1400 + rnd(900), .02, 0, 'triangle'); }
+  }
+  let down = false;
+  const pos = e => { const r = dc.getBoundingClientRect(); return [(e.clientX - r.left) * 160 / r.width, (e.clientY - r.top) * 160 / r.height]; };
+  dc.addEventListener('pointerdown', e => { if (cleaned) return; down = true; dc.setPointerCapture(e.pointerId); brushAt(...pos(e)); measure(); });
+  dc.addEventListener('pointermove', e => { if (!down || cleaned) return; brushAt(...pos(e)); measure(); });
+  dc.addEventListener('pointerup', () => { down = false; });
+  m.querySelector('#bBtn').onclick = () => { if (cleaned) return; for (let i = 0; i < 6; i++) brushAt(16 + rnd(128), 16 + rnd(128)); measure(); };
+  // --- documentazione ---
   const ph = m.querySelector('#ph');
-  const cv = spriteCanvas(it.rows, it.colors, 8); cv.style.setProperty('--bg', LAYER_COLORS[f.layer - 1]); ph.appendChild(cv);
+  const cv = spriteCanvas(it.rows, it.colors, 8); cv.style.setProperty('--bg', ground); ph.appendChild(cv);
   const fb = m.querySelector('#fb'); let ok1 = false, ok2 = false;
   const check = () => { m.querySelector('#shot').disabled = !(ok1 && ok2); };
   m.querySelectorAll('#q1 button').forEach(b => b.onclick = () => {
@@ -782,12 +972,13 @@ function openScheda(f){
     m.querySelector('#shot').disabled = true; m.querySelector('#save').disabled = false; m.querySelector('#save').focus();
   };
   m.querySelector('#save').onclick = () => { m.remove(); saveFind(f); };
-  m.querySelector('#q1 button').focus();
+  m.querySelector('#bBtn').focus();
 }
 function saveFind(f){
-  f.documented = true; f.day = S.day; S.pending = null; S.todayFinds.push(f);
+  f.documented = true; f.day = S.day; S.pendings = S.pendings.filter(x => x !== f); S.todayFinds.push(f);
   S.depth[f.col][f.row] = Math.min(3, S.depth[f.col][f.row] + 1);
   sfx.ok(); renderHud(); renderGrid(); renderCards();
+  const mu = actors.muhammad; if (mu) bubble(mu, 'Click! Scheda salvata', 1500);
   const vLeft = romanLeft('vaso').length, mLeft = romanLeft('moneta').length;
   if (!vLeft && !mLeft){ setTimeout(finish, 500); return; }
   if (ITEMS[f.type].roman){
@@ -797,7 +988,7 @@ function saveFind(f){
     say('paul', f.layer === 1 ? 'Non è romano: è un oggetto di oggi! Ma lo documentiamo lo stesso, ogni oggetto racconta qualcosa.'
                               : 'Del Medioevo: più antico di noi, ma più recente dei Romani. Scheda salvata!');
   }
-  if (totalEnergy() === 0) setTimeout(endDay, 900);
+  maybeEndDay();
 }
 
 /* ---------- GIORNALE DI SCAVO ---------- */
@@ -819,7 +1010,7 @@ function endDay(){
   m.querySelector('#sleep').focus();
   m.querySelector('#sleep').onclick = () => {
     m.remove(); S.day++; S.energy = { paul:6, laura:6, muhammad:6 }; S.used = {}; S.hints = [];
-    S.dugToday = 0; S.todayFinds = []; renderHud(); renderGrid(); renderCards();
+    S.dugToday = 0; S.todayFinds = []; resetActors(); renderHud(); renderGrid(); renderCards(); renderSel();
     say('laura', `Buongiorno! È il giorno ${S.day}. Abbiamo di nuovo tutti i colpi di cazzuola e i nostri aiuti speciali.`);
   };
 }
